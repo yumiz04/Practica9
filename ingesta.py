@@ -1,12 +1,16 @@
 from dotenv import load_dotenv
 from supabase import create_client
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 import os
+import time
 
 load_dotenv()
 
 ARCHIVO = "politicas_empresa.txt"
 TABLA = "politicas_chunks"
+TASK_TYPE_INDEX = "RETRIEVAL_DOCUMENT" # Recuperación de datos
+DIMS = 3072
 
 supabase = create_client(
     # os.environ["SUPABASE_URL"],
@@ -15,7 +19,11 @@ supabase = create_client(
     os.environ.get("SUPABASE_KEY")
 )
 
-modelo = SentenceTransformer("all-MiniLM-L6-v2")
+modelo = GoogleGenerativeAIEmbeddings(
+    model = "models/gemini-embedding-001",
+    task_type = TASK_TYPE_INDEX
+    # En automático toma la API KEY de Gemini
+)
 
 # Crear los chunks
 def dividir_chunks(texto: str):
@@ -51,6 +59,18 @@ def dividir_chunks(texto: str):
     cerrar_articulo()
     return chunks
 
+# Cuidar el dinero, vectorizar de cierta cantidad en cierta cantidad
+# Función para codificar vectores de 20 en 20
+def embed_en_lotes(texto:str, tam_lote:int = 20):
+    todos = []
+    for i in range(0, len(texto), tam_lote):
+        lote = texto[i: i + tam_lote]
+        embeddings_lote = modelo.embed_documents(lote) # En lugar de encode
+        todos.extend(embeddings_lote)
+        if i+tam_lote < len(texto):
+            time.sleep(0.5)
+    return todos
+
 def main():
     with open(ARCHIVO, encoding="UTF-8") as f:
         texto = f.read()
@@ -62,7 +82,7 @@ def main():
     #     print(e ['content'])
 
     # Generar los embeddings
-    embeddings = modelo.encode([c['content'] for c in chunks])
+    embeddings = embed_en_lotes(chunks) # SE VA A REVISAR
 
     # Formar una lista de registros (mas rapido que de uno a uno)
     filas = [

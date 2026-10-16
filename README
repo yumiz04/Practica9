@@ -1,4 +1,4 @@
 Proyecto 9 (gemini)
 
 -- Instalar ependencias del proyecto
-     pip install supabase sentence-transformers python-dotenv
+     pip install supabase langchain-google-genai python-dotenv
