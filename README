@@ -2,3 +2,6 @@ Proyecto 9 (gemini)
 
 -- Instalar ependencias del proyecto
      pip install supabase langchain-google-genai python-dotenv
+
+Pendiente:
+Google AI Studio > Claves de API

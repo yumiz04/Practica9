@@ -8,7 +8,7 @@ import time
 load_dotenv()
 
 ARCHIVO = "politicas_empresa.txt"
-TABLA = "politicas_chunks"
+TABLA = "politicas_chunks_gemini"
 TASK_TYPE_INDEX = "RETRIEVAL_DOCUMENT" # Recuperación de datos
 DIMS = 3072
 
@@ -23,6 +23,7 @@ modelo = GoogleGenerativeAIEmbeddings(
     model = "models/gemini-embedding-001",
     task_type = TASK_TYPE_INDEX
     # En automático toma la API KEY de Gemini
+    # Lo puede llamar GEMINI_API_KEY o GOOGLE_API_KEY
 )
 
 # Crear los chunks
@@ -61,7 +62,7 @@ def dividir_chunks(texto: str):
 
 # Cuidar el dinero, vectorizar de cierta cantidad en cierta cantidad
 # Función para codificar vectores de 20 en 20
-def embed_en_lotes(texto:str, tam_lote:int = 20):
+def embed_en_lotes(texto:list[str], tam_lote:int = 20) -> list[list[float]]:
     todos = []
     for i in range(0, len(texto), tam_lote):
         lote = texto[i: i + tam_lote]
@@ -72,7 +73,7 @@ def embed_en_lotes(texto:str, tam_lote:int = 20):
     return todos
 
 def main():
-    with open(ARCHIVO, encoding="UTF-8") as f:
+    with open(ARCHIVO,encoding="UTF-8") as f:
         texto = f.read()
 
     chunks = dividir_chunks(texto)
@@ -82,7 +83,8 @@ def main():
     #     print(e ['content'])
 
     # Generar los embeddings
-    embeddings = embed_en_lotes(chunks) # SE VA A REVISAR
+    texto = [c['content'] for c in chunks]
+    embeddings = embed_en_lotes(texto) # SE VA A REVISAR
 
     # Formar una lista de registros (mas rapido que de uno a uno)
     filas = [
@@ -91,10 +93,10 @@ def main():
             "capitulo": c['capitulo'],
             "articulo": c['articulo'],
             "content": c['content'],
-            "embedding": emb.tolist()
+            "embedding": emb
         }
         for c,emb in zip(chunks, embeddings) # Zip sirve para agrupar iterables
-    ]
+    ]                                        # contenido y vectores
 
     # Eliminar todos los registros de la base de datos
     supabase.table(TABLA).delete().eq("archivo", ARCHIVO).execute()
