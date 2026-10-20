@@ -13,7 +13,6 @@ modelo = GoogleGenerativeAIEmbeddings(
     task_type = TASK_TYPE_QUERY
 )
 
-
 def buscar(pregunta:str, top_k:int = 3, umbral:float = 0.0) -> list[dict]:
     query_embedding = modelo.embed_query(pregunta)
     result = supabase.rpc("match_politicas_gemini", {
@@ -23,21 +22,7 @@ def buscar(pregunta:str, top_k:int = 3, umbral:float = 0.0) -> list[dict]:
     }).execute()
     return result.data
 
-def main():
-    preguntas = [
-        "¿Cuántos días de vacaciones me tocan después de 3 años?",
-        "¿Cuándo me pagan el aguinaldo?",
-        "¿Puedo trabajar desde mi casa?",
-        "¿Cuántos minutos tengo para llegar tarde?",
-        "Falleció un familiar, ¿Qué puedo hacer?"
-    ]
-
-    # for p in preguntas:
-    #     print(f"\nPregunta: {p}")
-    #     for r in buscar(p):
-    #         print(f"{r['similarity']} {r['articulo']}")
-
-    # Estilo de un chat interactivo
+def main(): # Estilo de un chat interactivo
     print("Modo interactivo (Salir o exit para terminar)")
     while True:
         p = input("\nPregunta: ").strip()

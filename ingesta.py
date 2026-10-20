@@ -79,9 +79,6 @@ def main():
     chunks = dividir_chunks(texto)
     print(f"Fragmentos realizados: {len(chunks)}")
 
-    # for e in chunks:
-    #     print(e ['content'])
-
     # Generar los embeddings
     texto = [c['content'] for c in chunks]
     embeddings = embed_en_lotes(texto) # SE VA A REVISAR
