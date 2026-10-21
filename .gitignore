@@ -1,2 +1,6 @@
+__pycache__
 venv
 .env
+
+resultados.csv
+tiempos_ingesta.json

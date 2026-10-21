@@ -1,107 +1,72 @@
-from dotenv import load_dotenv
-from supabase import create_client
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
+"""Ingesta: 3 estrategias de chunking x modelos disponibles + tiempos."""
+import json
 import os
 import time
+
+from dotenv import load_dotenv
+from supabase import create_client
+
+from chunking import ESTRATEGIAS
+from modelos import MODELOS, disponibles, embed_documentos
 
 load_dotenv()
 
 ARCHIVO = "politicas_empresa.txt"
-TABLA = "politicas_chunks_gemini"
-TASK_TYPE_INDEX = "RETRIEVAL_DOCUMENT" # Recuperación de datos
-DIMS = 3072
+TABLA = "politicas_bench"
+ARCHIVO_TIEMPOS = "tiempos_ingesta.json"
+LOTE_INSERT = 20  # los vectores de Gemini (3072) pesan; lotes chicos
 
-supabase = create_client(
-    # os.environ["SUPABASE_URL"],
-    # os.environ["SUPABASE_KEY"]
-    os.environ.get("SUPABASE_URL"), # Se puede dar un valor por defecto
-    os.environ.get("SUPABASE_KEY")
-)
+supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
-modelo = GoogleGenerativeAIEmbeddings(
-    model = "models/gemini-embedding-001",
-    task_type = TASK_TYPE_INDEX
-    # En automático toma la API KEY de Gemini
-    # Lo puede llamar GEMINI_API_KEY o GOOGLE_API_KEY
-)
-
-# Crear los chunks
-def dividir_chunks(texto: str):
-    # Crear algunas variables
-    chunks = []
-    capitulo_actual = None
-    articulo_actual = None
-    lineas_actuales: list[str] = []
-
-    def cerrar_articulo():
-        if articulo_actual and lineas_actuales:
-            chunks.append({
-                "capitulo": capitulo_actual,
-                "articulo": articulo_actual,
-                "content": f"{capitulo_actual}\n{articulo_actual}\n" + "\n".join(lineas_actuales).strip()
-            })
-
-    # Leer linea a linea de las politicas
-    for linea in texto.splitlines():
-        linea = linea.strip()
-        if not linea:
-            continue
-        if linea.startswith("CAPÍTULO"):
-            cerrar_articulo()
-            articulo_actual, lineas_actuales = None, []
-            capitulo_actual = linea
-        elif linea.startswith("Artículo"):
-            cerrar_articulo()
-            articulo_actual, lineas_actuales = linea, []
-        elif articulo_actual:
-            lineas_actuales.append(linea)
-
-    cerrar_articulo()
-    return chunks
-
-# Cuidar el dinero, vectorizar de cierta cantidad en cierta cantidad
-# Función para codificar vectores de 20 en 20
-def embed_en_lotes(texto:list[str], tam_lote:int = 20) -> list[list[float]]:
-    todos = []
-    for i in range(0, len(texto), tam_lote):
-        lote = texto[i: i + tam_lote]
-        embeddings_lote = modelo.embed_documents(lote) # En lugar de encode
-        todos.extend(embeddings_lote)
-        if i+tam_lote < len(texto):
-            time.sleep(0.5)
-    return todos
 
 def main():
-    with open(ARCHIVO,encoding="UTF-8") as f:
+    with open(ARCHIVO, encoding="UTF-8") as f:
         texto = f.read()
 
-    chunks = dividir_chunks(texto)
-    print(f"Fragmentos realizados: {len(chunks)}")
+    activos = disponibles()
+    omitidos = [k for k in MODELOS if k not in activos]
+    print("Modelos a usar:", ", ".join(activos))
+    if omitidos:
+        print("Omitidos (falta API key):", ", ".join(omitidos))
 
-    # Generar los embeddings
-    texto = [c['content'] for c in chunks]
-    embeddings = embed_en_lotes(texto) # SE VA A REVISAR
+    tiempos = {}
 
-    # Formar una lista de registros (mas rapido que de uno a uno)
-    filas = [
-        {
-            "archivo": ARCHIVO,
-            "capitulo": c['capitulo'],
-            "articulo": c['articulo'],
-            "content": c['content'],
-            "embedding": emb
-        }
-        for c,emb in zip(chunks, embeddings) # Zip sirve para agrupar iterables
-    ]                                        # contenido y vectores
+    for estrategia, fn in ESTRATEGIAS.items():
+        chunks = fn(texto)
+        print(f"\n[{estrategia}] {len(chunks)} chunks")
 
-    # Eliminar todos los registros de la base de datos
-    supabase.table(TABLA).delete().eq("archivo", ARCHIVO).execute()
+        filas = [{"archivo": ARCHIVO, "estrategia": estrategia,
+                  "capitulo": c["capitulo"], "articulo": c["articulo"],
+                  "content": c["content"]} for c in chunks]
 
-    # Agregar a la base de datos
-    supabase.table(TABLA).insert(filas).execute()
+        for clave in activos:
+            cfg = MODELOS[clave]
+            t0 = time.perf_counter()
+            embs = embed_documentos(clave, [c["content"] for c in chunks])
+            tiempos[f"{estrategia}|{clave}"] = time.perf_counter() - t0
 
-    print(f"Se insertaron {len(filas)} registros en la base de datos")
+            assert len(embs[0]) == cfg["dims"], (
+                f"{clave}: el modelo devolvió {len(embs[0])} dims y la columna "
+                f"espera {cfg['dims']}")
+            for fila, emb in zip(filas, embs):
+                fila[cfg["columna"]] = emb
+            print(f"   {clave:7s} listo en {tiempos[f'{estrategia}|{clave}']:.2f} s")
 
-if __name__ == '__main__':
+        (supabase.table(TABLA).delete()
+            .eq("archivo", ARCHIVO).eq("estrategia", estrategia).execute())
+        for i in range(0, len(filas), LOTE_INSERT):
+            supabase.table(TABLA).insert(filas[i:i + LOTE_INSERT]).execute()
+
+    with open(ARCHIVO_TIEMPOS, "w", encoding="UTF-8") as f:
+        json.dump(tiempos, f, indent=2)
+
+    print("\nTiempo de embeddings (s):")
+    for llave, t in tiempos.items():
+        est, mod = llave.split("|")
+        print(f"  {est:10s} {mod:7s} {t:7.2f}")
+    print(f"\nTiempos guardados en {ARCHIVO_TIEMPOS} (los usa bench.py)")
+    print("Nota: el tiempo de Gemini incluye red y pausas entre lotes.")
+
+
+if __name__ == "__main__":
     main()
