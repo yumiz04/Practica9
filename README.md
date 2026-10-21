@@ -36,5 +36,5 @@ Activar el entorno virtual (si no está activo)
 
 Instalar dependencias del proyecto
 ```bash
-     pip install supabase langchain-google-genai python-dotenv
+pip install supabase langchain-google-genai python-dotenv sentence-transformers
 ```
