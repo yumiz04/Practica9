@@ -46,6 +46,11 @@ pip install supabase langchain-google-genai python-dotenv sentence-transformers
 > Ejecute primero el script sql disponible en la sección [Recursos adicionales](#recursos-adicionales)
 > en el editor sql de supabase antes de continuar.
 
+> [!WARNING]
+> Asegúrese de tener una buena velocidad de conexión a Internet,
+> ya que se descargarán algunos modelos la primera vez que
+> ejecute las pruebas.
+
 Ejecutar
 ```bash
 python ingesta.py
@@ -65,6 +70,7 @@ por 'ingesta.py' -> 'tiempos_ingesta.json' y 'bench.py'
 crea un CSV con los resultados generales -> 'resultados'
 
 ## Recursos adicionales
+### Script SQL para supabase
 Ejecutar en el SQL Editor de Supabase, es seguro ejecutarlo varias veces
 ```markdown
 create extension if not exists vector;
