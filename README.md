@@ -41,6 +41,11 @@ pip install supabase langchain-google-genai python-dotenv sentence-transformers
 ```
 
 ## Guía de uso
+> [!WARNING]
+> Necesitará la tabla 'politicas_bench' y algunas funciones.
+> Ejecute primero el script sql disponible en la sección [Recursos adicionales](#recursos-adicionales)
+> en el editor sql de supabase antes de continuar.
+
 Ejecutar
 ```bash
 python ingesta.py
